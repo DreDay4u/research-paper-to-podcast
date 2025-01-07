@@ -2,6 +2,17 @@
 
 An automated podcast generation system using [CrewAI](https://crewai.com/) and [ElevenLabs](https://elevenlabs.io/). The system reads research papers and creates engaging, conversational podcasts with natural-sounding voices.
 
+## 🎧 Latest AI Research Paper Podcast
+
+[![Spotify](https://img.shields.io/badge/Listen_on-Spotify-1DB954?style=for-the-badge&logo=spotify&logoColor=white)](https://open.spotify.com/episode/1PexEFSrxDyTiy9mcBt9D3?si=FM1_sDcPQ52ifrnmyOLLkw)
+
+Latest Episode: "Long Context vs. RAG for LLMs"
+- 🔍 Deep dive into the performance comparison
+- 🧠 Analysis of memory vs retrieval approaches
+- 💡 Real-world implications and use cases
+
+Generated using AI agents for research analysis, script writing, and voice synthesis.
+
 ## Features
 - Research paper analysis and summarization
 - Natural conversational script generation
