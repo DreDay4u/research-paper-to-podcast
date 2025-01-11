@@ -107,12 +107,15 @@ class PodcastAudioGenerator(BaseTool):
                     audio = AudioSegment.from_file(filename)
                     normalized = audio.normalize()  # Simple normalization
                     normalized = normalized + 4  # Slight boost
-                    normalized.export(
+                    
+                    # Use context manager to ensure file is closed
+                    with normalized.export(
                         filename,
                         format=self.audio_config.format,
                         bitrate=self.audio_config.bitrate,
                         parameters=["-ar", str(self.audio_config.sample_rate)]
-                    )
+                    ) as f:
+                        f.close()
 
                 audio_files.append(filename)
                 print(f'Audio content written to file "{filename}"')

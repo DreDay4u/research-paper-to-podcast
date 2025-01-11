@@ -1,11 +1,13 @@
 from crewai import Agent, Task, Crew, Process, LLM
 from crewai.knowledge.source.pdf_knowledge_source import PDFKnowledgeSource
+from crewai_tools import SerperDevTool
 from pydantic import BaseModel, Field
 from typing import List
 from datetime import datetime
 from dotenv import load_dotenv
 import os
 from tools import PodcastAudioGenerator, PodcastMixer, VoiceConfig
+
 
 def setup_directories():
     """Set up organized directory structure"""
@@ -27,7 +29,7 @@ def setup_directories():
 load_dotenv()
 
 # --- PDF Knowledge Source ---
-research_paper = PDFKnowledgeSource(file_paths="long-context_vs_RAG.pdf")
+research_paper = PDFKnowledgeSource(file_paths="workplace-prod.pdf")
 
 # --- Pydantic Models definitions ---
 class PaperSummary(BaseModel):
@@ -104,6 +106,7 @@ audio_generator.add_voice(
 )
 
 podcast_mixer = PodcastMixer(output_dir=dirs['FINAL'])
+search_tool = SerperDevTool()
 
 
 # --- Agents ---
@@ -115,6 +118,19 @@ researcher = Agent(
     key findings and their real-world implications.""",
     verbose=True,
     llm=summary_llm
+)
+
+research_support = Agent(
+    role="Research Support Specialist",
+    goal="Find current context and supporting materials relevant to the paper's topic",
+    backstory="""You're a versatile research assistant who excels at finding 
+    supplementary information across academic fields. You have a talent for 
+    connecting academic research with real-world applications, current events, 
+    and practical examples, regardless of the field. You know how to find 
+    credible sources and relevant discussions across various domains.""",
+    verbose=True,
+    tools=[search_tool],
+    llm=script_enhancer_llm
 )
 
 script_writer = Agent(
@@ -171,57 +187,129 @@ summary_task = Task(
     output_file="output/metadata/paper_summary.json"
 )
 
+supporting_research_task = Task(
+    description="""After analyzing the paper summary, find recent and relevant supporting 
+    materials that add context and real-world perspective to the topic.
+    
+    Research Approach:
+    1. Topic Analysis:
+        • Identify key themes and concepts from the paper
+        • Determine related fields and applications
+        • Note any specific claims or findings to verify
+    
+    2. Current Context:
+        • Recent developments in the field
+        • Latest practical applications
+        • Industry or field-specific news
+        • Related ongoing research
+    
+    3. Supporting Evidence:
+        • Academic discussions and debates
+        • Industry reports and white papers
+        • Professional forum discussions
+        • Conference presentations
+        • Expert opinions and analyses
+    
+    4. Real-world Impact:
+        • Practical implementations
+        • Case studies
+        • Success stories or challenges
+        • Market or field adoption
+    
+    5. Different Perspectives:
+        • Alternative approaches
+        • Critical viewpoints
+        • Cross-disciplinary applications
+        • Regional or cultural variations
+    
+    Focus on finding information that:
+    • Is recent (preferably within last 2 years)
+    • Comes from credible sources
+    • Adds valuable context to the paper's topic
+    • Provides concrete examples or applications
+    • Offers different viewpoints or approaches""",
+    expected_output="A structured collection of relevant supporting materials and examples",
+    agent=research_support,
+    context=[summary_task],
+    output_file="output/metadata/supporting_research.json"
+)
+
 podcast_task = Task(
-    description="""Using the paper summary, create an engaging and informative podcast conversation 
-    between Julia and Guido about the research. Make it feel like a natural, enjoyable conversation 
-    between two tech enthusiasts who genuinely love their field - similar to the Joe Rogan Experience 
-    but focused on tech.
+    description="""Using the paper summary and supporting research, create an engaging and informative podcast conversation 
+    between Julia and Guido. Make it feel natural while clearly distinguishing between paper findings and supplementary research.
+
+    Source Attribution Guidelines:
+    • For Paper Content:
+        - "According to the paper..."
+        - "The researchers found that..."
+        - "In their study, they discovered..."
+        - "The paper's methodology showed..."
+    
+    • For Supporting Research:
+        - "I recently read about..."
+        - "There's some interesting related work by..."
+        - "This reminds me of a recent case study..."
+        - "Building on this, other researchers have found..."
 
     Host Dynamics:
     - Julia: A knowledgeable but relatable expert who:
         • Explains technical concepts with enthusiasm
+        • Sometimes playfully challenges Guido's assumptions
+        • Clearly distinguishes between paper findings and broader context
+        • Occasionally plays devil's advocate on certain points
+        • Admits when she's uncertain about specific aspects
         • Shares relevant personal experiences with AI and tech
         • Can connect the research to broader tech trends
         • Uses casual expressions and shows genuine excitement
     
     - Guido: An engaged and curious co-host who:
         • Asks insightful questions and follows interesting threads
-        • Brings up related examples from other tech domains
+        • Occasionally disagrees based on his practical experience
+        • Brings up relevant external examples and research
+        • Respectfully pushes back on theoretical claims with real-world examples
+        • Helps find middle ground in discussions
         • Helps make connections to practical applications
         • Naturally guides the conversation back to main topics
 
-    Conversation Flow:
-    1. Core Discussion: Focus on the RULER research and findings
-    2. Natural Tangents (examples):
-        • Personal experiences with AI language models
-        • Similar problems in other areas of tech
-        • Funny or interesting AI interaction stories
-        • Related developments in the tech industry
-        • Practical implications for developers or users
-    3. Smooth Returns: Natural ways to bring the conversation back:
-        • "You know, this actually relates to what we were discussing about RULER..."
-        • "That reminds me of how the researchers approached this problem..."
-        • "Speaking of which, this connects perfectly with the paper's findings..."
+    Example Flow with Attribution:
+    Julia: "The paper's findings show that RAG is superior for factual queries."
+    Guido: "That's interesting, because I recently read about a case study where..."
+    Julia: "Oh, that's a great point! While the researchers found X, these real-world examples show Y..."
 
-    Example Flow:
-    Julia: "The way RULER handles length control is fascinating..."
-    Guido: "Oh man, this reminds me of when GitHub Copilot generated this massive chunk of code 
-    when I just wanted a simple function. It was like asking for a screwdriver and getting an 
-    entire hardware store!"
-    Julia: "That's hilarious! And you know what's interesting? That's exactly the kind of 
-    problem these researchers were trying to solve with RULER..."
+    Disagreement Guidelines:
+    • Keep disagreements friendly and constructive
+    • Use phrases like:
+        - "I see what the paper suggests, but in practice..."
+        - "While the study found X, other research shows..."
+        - "That's an interesting finding, though recent developments suggest..."
+    • Always find common ground or learning points
+    • Use disagreements to explore nuances
+    • Resolve differences with mutual understanding
+
+    Conversation Flow:
+    1. Core Discussion: Focus on the research and findings
+    2. Natural Tangents with Clear Attribution:
+        • "Building on the paper's findings..."
+        • "This relates to some recent developments..."
+        • "While not covered in the paper, there's interesting work on..."
+    3. Smooth Returns: Natural ways to bring the conversation back:
+        • "Coming back to what the researchers found..."
+        • "This actually connects to the paper's methodology..."
+        • "That's a great example of what the study was trying to solve..."
 
     Writing Guidelines:
-    1. Allow natural divergence into relevant topics
-    2. Use personal anecdotes and examples
-    3. Connect tangents back to main discussion smoothly
+    1. Clearly distinguish paper findings from supplementary research
+    2. Use attribution phrases naturally within the conversation
+    3. Connect different sources of information meaningfully
     4. Keep technical content accurate but conversational
     5. Maintain engagement through relatable stories
+    6. Include occasional friendly disagreements
+    7. Show how different perspectives and sources enrich understanding
     
     Note: Convey reactions through natural language rather than explicit markers like *laughs*.""",
-    expected_output="A well-balanced podcast script that combines technical content with engaging tangents.",
+    expected_output="A well-balanced podcast script that clearly distinguishes between paper content and supplementary research.",
     agent=script_writer,
-    context=[summary_task],
+    context=[summary_task, supporting_research_task],
     output_pydantic=PodcastScript,
     output_file="output/metadata/podcast_script.json"
 )
@@ -314,8 +402,8 @@ audio_task = Task(
 
 # --- Crew and Process ---
 crew = Crew(
-    agents=[researcher, script_writer, script_enhancer, audio_generator_agent],
-    tasks=[summary_task, podcast_task, enhance_script_task, audio_task],
+    agents=[researcher, research_support, script_writer, script_enhancer, audio_generator_agent],
+    tasks=[summary_task, supporting_research_task, podcast_task, enhance_script_task, audio_task],
     process=Process.sequential,
     knowledge_sources=[research_paper],
     verbose=True
@@ -324,9 +412,10 @@ crew = Crew(
 if __name__ == "__main__":    
     # Update task output files
     summary_task.output_file = os.path.join(dirs['DATA'], "paper_summary.json")
+    supporting_research_task.output_file = os.path.join(dirs['DATA'], "supporting_research.json")
     podcast_task.output_file = os.path.join(dirs['DATA'], "podcast_script.json")
     enhance_script_task.output_file = os.path.join(dirs['DATA'], "enhanced_podcast_script.json")
     audio_task.output_file = os.path.join(dirs['DATA'], "audio_generation_meta.json")
     
     # Run the podcast generation process
-    results = crew.kickoff(inputs={"paper": "long-context_vs_RAG.pdff"})
+    results = crew.kickoff(inputs={"paper": "workplace-prod.pdf"})
